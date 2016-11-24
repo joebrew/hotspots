@@ -103,19 +103,24 @@ opd <-
 # OUTPATIENT INFORMATION #############################
 
 # PermID ############
+# gen noperm=substr(perm_id, 1, 1)
+opd$noperm <- substr(opd$perm_id, 1, 1)
+opd$noperm <- ifelse(opd$noperm == 'L', NA, opd$noperm)
+opd$noperm <- as.numeric(as.character(opd$noperm))
+# replace perm_id="" if noperm>3 | noperm==.
+# replace perm_id="" if perm_id=="288"
+opd$perm_id <- 
+  ifelse(is.na(opd$noperm) |
+           opd$noperm > 3 |
+           opd$perm_id == '288',
+         NA,
+         opd$perm_id)
+# replace perm_id="3830" if perm_id=="38308"
+# replace perm_id="3404-201" if perm_id=="340420126"
+opd$perm_id[opd$perm_id == '38308'] <- '3830'
+opd$perm_id[opd$perm_id == '340420126'] <- '3404-201'
 
-
-  
-  *PermID 
-gen noperm=substr(perm_id, 1, 1)
-replace noperm="" if noperm=="L"
-destring noperm, replace 
-replace perm_id="" if noperm>3 | noperm==.
-replace perm_id="" if perm_id=="288"
-replace perm_id="3830" if perm_id=="38308"
-replace perm_id="3404-201" if perm_id=="340420126"
-
-*Format PermID
+# *Format PermID #####
 gen permlen=length(perm_id)
 gen end=substr(perm_id, -1, .)
 replace perm_id=substr(perm_id, 1, 8) if end=="-" & permlen==9
