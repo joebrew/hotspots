@@ -629,3 +629,21 @@ opd$seastrad <- ifelse(opd$seastrad == 1, 'rainy',
 # # USE PDF TO GET EXAM FISICO AND DIAGNOSIS (WHO ICD codes) #################
 # Use this ICD package: https://jackwasey.github.io/icd/
 # Need to decide which columns to use with BEA
+icd_columns <-
+  names(opd)[grepl('icd', names(opd))]
+icd_columns <- icd_columns[icd_columns != 'aftericd']
+
+# Create explanation columns
+for (j in 1:length(icd_columns)){
+  opd[,paste0(icd_columns[j],
+              '_explanation')] <- NA
+}
+for (j in 1:length(icd_columns)){
+  the_column <- opd[,icd_columns[j]]
+  the_column <- as.character(the_column)
+  result <- ifelse(is.na(the_column),
+                   NA,
+                   icd9Explain(the_column))
+  opd[,paste0(icd_columns[j],
+              '_explanation')] <- result
+}

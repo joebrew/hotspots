@@ -12,17 +12,19 @@ Beatriz Galatas
 - Clone the repository
 - Create a data folder (ignored by git) and place into that folder a `.csv` of the raw OPD data named "opd_YYYY-mm-dd.csv" (for example, "opd_2016-05-26.csv").
 - Run the "clean_opd.R" script, based loosely on Bea Galatas' "misc/opd_cleaning_joe.do", in order to clean the .csv and produce a dataframe ready for analysis.
+- Run the "create_time_at_risk.R" script, written by Joe Brew, in order to clean the `ohds_basetmr.dta` data, and convert into "long" person-time-at-risk format.
 
 ## Datasets
 
+- opd: outpatient diagnoses
 - basetmr is the dataset which provides person-time at risk
--- expand = the expanded area (use only expand == 0)
 - cross-sectional = includes moqutio control prevalence
-- does incidence in children match up with PCR prevalence
 
 ## Misc
 - There needs to be a 28 days following onset to not be considered at risk
 - Take out people once above 15
+- does incidence in children match up with PCR prevalence
+
 
 ## Other ideas
 - We missed so many episodes in the < 28 days period
