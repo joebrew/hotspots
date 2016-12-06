@@ -17,6 +17,8 @@ Beatriz Galatas
 
 - basetmr is the dataset which provides person-time at risk
 -- expand = the expanded area (use only expand == 0)
+- cross-sectional = includes moqutio control prevalence
+- does incidence in children match up with PCR prevalence
 
 ## Misc
 - There needs to be a 28 days following onset to not be considered at risk
@@ -26,7 +28,10 @@ Beatriz Galatas
 - We missed so many episodes in the < 28 days period
   - Mira (already passed CCI) protocols: look at risk factors of having multiple cases within 60 days
 
-- To do: Bea needs to send mira (multiple infection risk analysis) protocl to joe
+- To do:
+- Finish OPD cleaning
+- Create BaseTMR dataset
+- Replicate Ilha Josina files to get incidence
 
 ## Outcomes
 -Incidence 

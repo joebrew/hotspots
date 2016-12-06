@@ -1,7 +1,8 @@
 # This File Imports and Manages the OPD1+2+3+4+5 data extracted from CISM's Server on 
 # the 26th of May of 2016 using the R code provided by Agnaldo Samuel. 
 # 
-# It was written by Joe Brew, but is based on "misc/opd_cleaning_joe.do"
+# It was written by Joe Brew, but is based largely
+# on "misc/opd_cleaning_joe.do"
 # by Bea Galatas
 # Still in the making: 
 # - Physical Examincation 
@@ -12,6 +13,7 @@
 # Attach packages
 library(dplyr)
 library(EpiWeek)
+library(icd)
 
 # Read in data
 opd <- read.csv('data/opd_2016-05-26.csv')
@@ -147,7 +149,6 @@ opd$permlen <- NULL
 # *Household ############
 # gen permlen=length(perm_id)
 opd$permlen <- nchar(opd$perm_id)
-# ASK BEA ABOUT THIS - DOESN'T MAKE SENSE
 # gen agregado=substr(perm_id, 1, 8) if permlen>=8
 opd$agregado <- ifelse(opd$permlen >= 8,
                        substr(opd$perm_id, 1, 9),
@@ -216,11 +217,11 @@ opd$age <- ifelse(opd$age < 0, NA, opd$age)
 # *In Years 
 # gen ageyr= (date-dob)/365.25 if (dob!=. & date!=.)
 opd$ageyr <- as.numeric(opd$date - opd$dob) / 365.25
-#   replace ageyr=round(ageyr, 0.1) # ASK BEA WHY
+#   replace ageyr=round(ageyr, 0.1) 
 opd$ageyr <- round(opd$ageyr, 0.1)
 # replace ageyr=. if ageyr<0
 opd$ageyr <- ifelse(opd$ageyr < 0, NA, opd$ageyr)
-# drop if ageyr>=15 & age!=. # ASK BEA, WHAT?
+# drop if ageyr>=15 & age!=. 
 opd <- opd %>% filter(ageyr < 15 & !is.na(age))
 
 # *Create Age Groups
@@ -318,128 +319,219 @@ opd$nida <- ifelse(opd$brady %in% c(6, 7),
 # drop nidalen
 opd$nidalen <- NULL
 
+save.image('~/Desktop/temp.RData')
+
 # *Reason for slide not taken 
 # replace slideswhy=. if (slideswhy<1 | slideswhy>3)
-#   replace slideswhy=slideswhy-1 
+opd$slideswhy <- ifelse(opd$slideswhy < 1 | opd$slideswhy > 3, NA,
+                        opd$slideswhy)
+# replace slideswhy=slideswhy-1 
+opd$slideswhy <- opd$slideswhy - 1
 # lab define slideswhylab 0 "No criteria" 1 "Previous results in last 24h" 2 "Not authorized"
 # lab values slideswhy slideswhylab 
+opd$slidewhylab <- ifelse(opd$slideswhy == 0,
+                          'No criteria',
+                          ifelse(opd$slideswhy == 1,
+                                 'Previous results in last 24h',
+                                 ifelse(opd$slideswhy == 2,
+                                        'Not authorized',
+                                        NA)))
 # 
 # *Number of Sample Identification (NIDA) if a previous sample had been collected 
 # gen nidalen=length(brady2)
 # replace brady2="" if nidalen<6 
-# 
+opd$nidalen <- nchar(opd$brady2)
+opd$brady2 <- ifelse(opd$nidalen < 6,
+                     NA,
+                     opd$brady2)
+
 # *Create a new NIDA variable Supposing length 6 and 7 are missing the ".0"
 # gen nida2=brady2 
+opd$nida2 <- opd$brady2
 # replace nida2=brady2+".0" if nidalen==6 | nidalen==7
+opd$nida2 <- ifelse(opd$nidalen %in% c(6, 7),
+                    paste0(opd$brady, '.0'),
+                    opd$nida2)
 # drop nidalen
-# 
-# *<<<< INFORMATION ABOUT CURRENT ILLNESS <<<<<<<
+opd$nidalen <- NULL
+
+# *<<<< INFORMATION ABOUT CURRENT ILLNESS <<<<<<< ####################################
 #   
-#   *Has fever
+# *Has fever
 # replace fever2yno=. if fever2yno<1 | fever2yno>2
+opd$fever2yno <- 
+  ifelse(opd$fever2yno <1 | opd$fever2yno > 2,
+         NA,
+         opd$fever2yno)
 # recode fever2yno 2=0
-# lab values fever2yno yno
-# 
+opd$fever2yno <- 
+  ifelse(opd$fever2yno == 2,
+         0,
+         opd$fever2yno)
+# lab values fever2yno yno # ASK BEA
+opd$fever2yno <- ifelse(opd$fever2yno == 1, TRUE, 
+                        ifelse(opd$fever2yno == 2, FALSE, NA))
+
+
 # *Days of fever reported 
 # replace feverdays=. if feverdays<0
-# 
+opd$feverdays <-
+  ifelse(opd$feverdays <0,
+         NA,
+         opd$feverdays)
+
 # *Has cough 
 # replace coughyno=. if coughyno<1 | coughyno>2
+opd$coughyno <- ifelse(opd$coughyno < 1 | opd$coughyno > 2,
+                       NA,
+                       opd$coughyno)
 # recode coughyno 2=0
-# lab values coughyno yno 
-# 
+opd$coughyno[opd$coughyno == 2] <- 0
+# lab values coughyno yno  # ASK BEA
+opd$coughyno <- ifelse(opd$coughyno == 1, TRUE,
+                       ifelse(opd$coughyno == 2, FALSE,
+                              NA))
 # *Days of cough reported 
 # replace coughdays="" if coughdays=="NA"
 # destring coughdays, replace 
 # replace coughdays=. if coughdays<0
-# 
+opd$coughdays <- ifelse(opd$coughdays < 0, NA, opd$coughdays)
+
+# This is getting a bit repetive. Going to functionalize
+beafy <- function(var){
+  var <- ifelse(var < 1 | var > 2,
+                NA,
+                var)
+  var[var == 2] <- 0
+  var <- ifelse(var == 1, TRUE,
+                ifelse(var == 0, FALSE,
+                       NA))
+  return(var)
+}
+
 # *Difficulties breathing 
 # replace breathyno=. if breathyno<1 | breathyno>2
 # recode breathyno 2=0 
 # lab values breathyno yno
-# 
+opd$breathyno <- beafy(opd$breathyno)
+
+
 # *Days of difficulties in breathing reported
 # replace breathdays="" if breathdays=="NA"
 # destring breathdays, replace 
 # replace breathdays=. if breathdays<0
+opd$breathdays <- ifelse(opd$breathdays < 0, NA,
+                         opd$breathdays)
+
 # 
 # *Has diarrhea 
 # replace diarryno=. if diarryno<1 | diarryno>2
 # recode diarryno 2=0 
 # lab values diarryno yno 
-# 
+opd$diarryno <- beafy(opd$diarryno)
+
 # *Days of Diarrhea 
 # replace diarrdays=. if diarrdays<0
-# 
+opd$diarrdays <- ifelse(opd$diarrdays < 0, NA, opd$diarrdays)
+ 
 # *If diarrhea, number of Diarrheas reported 
 # replace diarrnum=. if diarrnum<0
-# 
+opd$diarrnum <- ifelse(opd$diarrnum < 0, NA, opd$diarrnum)
+
 # *If diarrhea, characteristics of feces 
 # replace diarchar=. if (diarchar<1 | diarchar>2)
-#   replace diarchar=diarchar-1
+opd$diarchar <- ifelse(opd$diarchar < 1 | opd$diarchar > 2, 
+                       NA,
+                       opd$diarchar)
+# replace diarchar=diarchar-1
+opd$diarchar <- opd$diarchar - 1
 # lab define diarcharlab 0 "Wattery" 1 "Bloody"
 # lab values diarchar diarcharlab
-# 
+opd$diarcharlab <- ifelse(opd$diarchar == 0, 'Wattery',
+                          ifelse(opd$diarchar == 2, 'Bloody', NA))
+
 # *Vomits 
 # replace vomityno=. if vomityno<1 | vomityno>2
 # recode vomityno 2=0
 # lab values vomityno yno 
-# 
+opd$vomityno <- beafy(opd$vomityno)
+
 # *Days of Vomit reported 
 # replace vomitdays="" if vomitdays=="NA"
 # destring vomitdays, replace 
 # replace vomitdays=. if vomitdays<0
+opd$vomitdays <-
+  ifelse(opd$vomitdays < 0, NA, opd$vomitdays)
 # 
 # *Has seizures
 # replace fittedyno=. if fittedyno<1 | fittedyno>2
 # recode fittedyno 2=0 
 # lab values fittedyno yno 
-# 
+opd$fittedyno <- beafy(opd$fittedyno)
+
 # *NUmber of seizures 
 # replace fittednum="" if fittednum=="NA"
 # destring fittednum, replace 
 # replace fittednum=. if fittednum<0
-# 
+opd$fittednum <- ifelse(opd$fittednum <0, NA,
+                        opd$fittednum)
+
 # *Burns
 # replace burnyno=. if burnyno<1 | burnyno>2
 # recode burnyno 2=0
 # lab values burnyno yno 
-# 
+opd$burnyno <- beafy(opd$burnyno)
+
 # *Accidents	
 # replace accidenyno=. if accidenyno<1 | accidenyno>2
 # recode accidenyno 2=0
 # lab values accidenyno yno 
-# 
+opd$accidenyno <- beafy(opd$accidenyno)
+
 # *Other Symptoms 
-# 
-# 
-# *<<<< PHYSICAL EXAMINATION <<<<<<<
-#   
-#   
+
+# *<<<< PHYSICAL EXAMINATION <<<<<<<##########################
 #   replace fontanelle=. if (fontanelle<1 | fontanelle>4)
-#     replace fontanelle=4 if age>18
+opd$fontanelle <-
+  ifelse(opd$fontanelle <1 | opd$fontanelle > 4,
+         NA,
+         opd$fontanelle)
+# replace fontanelle=4 if age>18
+opd$fontanelle[opd$age > 18] <- 4
 # replace deshidrat=. if (deshidrat<1 | deshidrat>4)
-#   
-#   
-#   
-#   *<<<<< OUTPATIENT DIAGNOSIS AND TREATMENT <<<<<<<<
+opd$deshidrat <- ifelse(opd$deshidrat <1 | opd$deshidrat > 4, NA,
+                        opd$deshidrat)
+
+#   *<<<<< OUTPATIENT DIAGNOSIS AND TREATMENT <<<<<<<< ####################
 #   
 #   *Thicksmear results (Number of Cross based on Microscopy Reading)
 # destring thicksmear, force replace 
+opd$thicksmear <- as.numeric(as.character(opd$thicksmear))
 # replace thicksmear=. if thicksmear>6
-# 
-# 
+opd$thicksmear[opd$thicksmear > 6] <- NA
+
 # *Identify Positive Slides 
 # gen slidepos=thicksmear
+opd$slidepos <- opd$thicksmear
 # recode slidepos 1/5=1 6=.
-# label define posneg 1 "Pos" 2 "Neg"
+opd$slidepos <- 
+  ifelse(opd$slidepos %in% 1:5,
+         1,
+         NA)
+# label define posneg 1 "Pos" 2 "Neg" # Ask bea - there are no twos, given above ifelse...
 # label values slidepos posneg
-# 
+opd$slidepos <- ifelse(opd$slidepos == 1, 'Pos',
+                       ifelse(opd$slidepos == 2, 'Neg', 
+                              NA))
+
 # *Clean RDT results 
 # replace rdt=. if (rdt==0 | rdt>=3) 
 #   label values rdt posneg
+opd$rdt[opd$rdt %in% c(0, 3)] <- NA
+opd$rdt <- ifelse(opd$rdt == 1, 'Pos',
+                  ifelse(opd$rdt == 2, 'Neg', NA))
 # 
-# *Packed Cell Volume (PCV) --> IMPORT FROM SERVOLAB 
+# *Packed Cell Volume (PCV) --> IMPORT FROM SERVOLAB  # ASK BEA
 # /*replace pcv=. if date<mdy(08,27,1998)
 # gen an33=(pcv<33) if pcv!=.
 # gen an25=(pcv<25) if pcv!=.
@@ -456,28 +548,42 @@ opd$nidalen <- NULL
 # label define anemiagrp 4 "pcv<15" 3 "pcv 15-<25" 2 "pcv 25-<33" 1 "pcv=>33" 
 # label values anemiagrp anem*/
 #   
-#   *<<<<< INPATIENT DIAGNOSIS AND TREATMENT <<<<<<<<
+# <<<<< INPATIENT DIAGNOSIS AND TREATMENT <<<<<<<< #############
 #   
-#   label define afterpcd 1 "casa" 2 "icd" 3 "transf" 4 "aband"
+# label define afterpcd 1 "casa" 2 "icd" 3 "transf" 4 "aband"
 # label values afterpcd afterpcd
+opd$afterpcd <- ifelse(opd$afterpcd == 1, 'casa',
+                       ifelse(opd$afterpcd == 2, 'icd',
+                              ifelse(opd$afterpcd ==3, 'transf',
+                                     ifelse(opd$afterpcd == 4, 'aband', NA))))
 # label define aftericd 1 "casa" 2 "internam" 3 "transf" 4 "obito" 5 "aband"
 # label values aftericd aftericd
-# 
-# 
-# 
+opd$aftericd <- ifelse(opd$aftericd == 1, 'casa',
+                       ifelse(opd$aftericd == 2, 'internam',
+                              ifelse(opd$aftericd == 3, 'transf',
+                                     ifelse(opd$aftericd == 4, 'obito',
+                                            ifelse(opd$aftericd == 5, 'aband', NA)))))
+
 # *END OF OUTPATIENT QUESTIONNAIRE 
-# 
-# 
-# *<<<<<<< ADDITIONAL DATA MANAGEMENT <<<<<<	
+# *<<<<<<< ADDITIONAL DATA MANAGEMENT <<<<<<	###################################
 #   
 #   *MALARIA	
 # *Create a malaria diagnosis variable 
 # gen malpos=slidepos
-# replace malpos=rdtpos if malpos==.
+# replace malpos=rdtpos if malpos==. # ASK BEA rdtpos does not exit - using rdt
+opd$malpos <- opd$slidepos
+opd$malpos <- ifelse(is.na(opd$malpos), opd$rdt, opd$malpos)
 # 
 # *Seasons
 # keep if date >= d(01jul1997) & date <= d(30jun2014)
+opd <- opd %>%
+  filter(date >= '1997-07-01',
+         date <= '2014-06-30')
+# ^ ASK BEA, WHAT ABOUT MORE RECENT STUFF
+# ASK BEA, why no data prior to 2001
+
 # gen season=.
+opd$season <- NA
 # replace season=1 if date>=d(01jul1997) & date <= d(30jun1998)
 # replace season=2 if date>=d(01jul1998) & date <= d(30jun1999)
 # replace season=3 if date>=d(01jul1999) & date <= d(30jun2000)
@@ -497,15 +603,29 @@ opd$nidalen <- NULL
 # replace season=17 if date>=d(01jul2013) & date <= d(30jun2014)
 # replace season=18 if date>=d(01jul2014) & date <= d(30jun2015)
 # replace season=19 if date>=d(01jul2015) & date <= d(30jun2016)
+opd$season <- 
+  floor((as.numeric(opd$date - as.Date('1997-07-01')) / 365.25))
 # 
 # *Wet and Rainy Season 
 # gen seastrad=mon
+opd$seastrad <- opd$mon
 # recode seastrad 1/4=1 5/10=2 11/12=1
+opd$seastrad <- ifelse(opd$seastrad %in% 1:4,
+                       1,
+                       ifelse(opd$seastrad %in% 5:10,
+                              2,
+                              ifelse(opd$seastrad == 12,
+                                    1,
+                                    NA)))
 # label define season 1 "rainy" 2 "dry"
 # label values seastrad season		
+opd$seastrad <- ifelse(opd$seastrad == 1, 'rainy',
+                       ifelse(opd$seastrad == 2, 'dry', NA))
 # 
 # 
 # save $dta/pri/opd_tot, replace 
 # 
 # 
-# # USE PDF TO GET EXAM FISICO AND DIAGNOSIS (WHO ICD codes)
+# # USE PDF TO GET EXAM FISICO AND DIAGNOSIS (WHO ICD codes) #################
+# Use this ICD package: https://jackwasey.github.io/icd/
+# Need to decide which columns to use with BEA
