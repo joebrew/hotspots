@@ -535,7 +535,27 @@ if('opd_cleaned.RData' %in% dir('data')){
   opd$rdt[opd$rdt %in% c(0, 3)] <- NA
   opd$rdt <- ifelse(opd$rdt == 1, 'Pos',
                     ifelse(opd$rdt == 2, 'Neg', NA))
-  # 
+  # SERVOLAB 
+  # # Source servolab functions (Agnaldo's work)
+  # servo_lab_functions <- dir('servo_lab_functions/')
+  # for (i in 1:length(servo_lab_functions)){
+  #   source(paste0('servo_lab_functions/',
+  #                servo_lab_functions[i]))
+  # }
+  
+  ## Establish a connection using the servolabr package
+  # library(devtools)
+  # library(roxygen2)
+  # document('ServolabR/'); install('ServolabR/')
+  servo_credentials <- read.delim('credentials/servo_lab_credentials.txt',
+                                  header = FALSE)$V1
+  servo_credentials <- as.character(servo_credentials)
+  servo <- ServolabGetConnection("172.16.234.223",
+                                 servo_credentials[1],
+                                 servo_credentials[2])
+  xmag <-ServolabGetResultsByNidas(nidasVector = xnidas, methodID = 1802, servoConnection = servo)  
+  xmag$nida <- as.character(xmag$nida)
+
   # *Packed Cell Volume (PCV) --> IMPORT FROM SERVOLAB  # ASK BEA
   # /*replace pcv=. if date<mdy(08,27,1998)
   # gen an33=(pcv<33) if pcv!=.
