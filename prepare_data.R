@@ -14,6 +14,8 @@
 library(dplyr)
 library(EpiWeek)
 library(icd)
+library(cism)
+library(data.table)
 
 if('opd_cleaned.RData' %in% dir('data')){
   load('data/opd_cleaned.RData')
@@ -207,7 +209,7 @@ if('opd_cleaned.RData' %in% dir('data')){
                             opd$mon_birth, '-',
                             opd$day_birth))
   # replace dob=. if dob>date
-  opd$dob <- ifelse(opd$dob > opd$date,
+  opd$dob <- if_else(opd$dob > opd$date,
                     NA,
                     opd$dob)
   # *Age ################## 
@@ -650,26 +652,26 @@ if('opd_cleaned.RData' %in% dir('data')){
   # save $dta/pri/opd_tot, replace 
   # 
   # 
-  # # USE PDF TO GET EXAM FISICO AND DIAGNOSIS (WHO ICD codes) #################
-  # Use this ICD package: https://jackwasey.github.io/icd/
-  icd_columns <-
-    names(opd)[grepl('icd', names(opd))]
-  icd_columns <- icd_columns[icd_columns != 'aftericd']
-  
-  # Create explanation columns
-  for (j in 1:length(icd_columns)){
-    opd[,paste0(icd_columns[j],
-                '_explanation')] <- NA
-  }
-  for (j in 1:length(icd_columns)){
-    the_column <- opd[,icd_columns[j]]
-    the_column <- as.character(the_column)
-    result <- ifelse(is.na(the_column),
-                     NA,
-                     icd9Explain(the_column))
-    opd[,paste0(icd_columns[j],
-                '_explanation')] <- result
-  }
+  # # # USE PDF TO GET EXAM FISICO AND DIAGNOSIS (WHO ICD codes) #################
+  # # Use this ICD package: https://jackwasey.github.io/icd/
+  # icd_columns <-
+  #   names(opd)[grepl('icd', names(opd))]
+  # icd_columns <- icd_columns[icd_columns != 'aftericd']
+  # 
+  # # Create explanation columns
+  # for (j in 1:length(icd_columns)){
+  #   opd[,paste0(icd_columns[j],
+  #               '_explanation')] <- NA
+  # }
+  # for (j in 1:length(icd_columns)){
+  #   the_column <- opd[,icd_columns[j]]
+  #   the_column <- as.character(the_column)
+  #   result <- ifelse(is.na(the_column),
+  #                    NA,
+  #                    icd9Explain(the_column))
+  #   opd[,paste0(icd_columns[j],
+  #               '_explanation')] <- result
+  # }
   
   # Create a simple malaria boolean
   opd$malaria <- 
@@ -685,4 +687,68 @@ if('opd_cleaned.RData' %in% dir('data')){
   # Save a snapshot
   save(opd,
        file = 'data/opd_cleaned.RData')
+}
+
+# Load in census data
+if('census_data.RData' %in% dir('data')){
+  load('data/census_data.RData')
+} else {
+  residency <- cism::get_data(tab = 'residency',
+                              dbname = 'openhds',
+                              port = 3306)
+  individual <- cism::get_data(tab = 'individual',
+                               dbname = 'openhds',
+                               port = 3306)
+  location <- cism::get_data(tab = 'location',
+                             dbname = 'openhds',
+                             port = 3306)
+  save(residency,
+       individual,
+       location,
+       file = 'data/census_data.RData')
+}
+
+# Create a time at risk dataset for the opd period
+if('cleaned_time_at_risk.RData' %in% dir('data')){
+  load('data/cleaned_time_at_risk.RData')
+} else {
+  
+  # Create time at risk
+  tar <- cism::create_time_at_risk(residency = residency,
+                                   individual = individual,
+                                   location = location)
+  
+  # Keep only those who are in the non-expanded zone
+  # (ie, bairro <= 3499) (need to confirm with charfudin)
+  tar$bairro <- as.numeric(as.character(substr(tar$locationName, 1, 4)))
+  tar <- tar %>%
+    filter(bairro <= 3499)
+  
+  # Keep only those who are < 15 (since this is the OPD cut-off)
+  # at the start date
+  tar <- tar %>%
+    filter(as.numeric(startDate - dob) / 365.25 < 15)
+  
+  # Expand time at risk into a daily dataset
+  etar <- cism::expand_time_at_risk(time_at_risk = tar,
+                                    start_date = '2002-01-01',
+                                    end_date = '2015-12-31')
+  rm(tar)
+  
+  # Remove from the expanded table any >15 y.o. dates
+  etar <- 
+    etar %>%
+    left_join(individual %>%
+                dplyr::select(uuid,
+                              dob) %>%
+                mutate(dob = as.Date(dob)),
+              by = c('individual_uuid' = 'uuid')) 
+  etar <- data.table::data.table(etar)
+  etar[,yo := as.numeric(date -dob) / 365.25]
+  etar <- etar[yo < 15]
+  etar <- data.frame(etar)
+  
+  # Save a copy for faster later use
+  save(etar,
+       file = 'data/cleaned_time_at_risk.RData')
 }
