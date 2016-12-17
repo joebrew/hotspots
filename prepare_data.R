@@ -16,13 +16,110 @@ library(EpiWeek)
 library(icd)
 library(cism)
 library(data.table)
+library(DBI)
 
 if('opd_cleaned.RData' %in% dir('data')){
   load('data/opd_cleaned.RData')
 } else {
   
-  # Read in data
-  opd <- read.csv('data/opd_2016-05-26.csv')
+  # Read in raw opd data
+  if('data/opd_dirty.RData' %in% dir('data')){
+    load('data/opd_dirty.RData')
+  } else {
+    # opd <- read.csv('data/opd_2016-05-26.csv')
+    con <- credentials_connect(credentials_extract(credentials_file = 'credentials/bea_credentials.yaml', all_in_file = TRUE))
+    
+    dbf_opd3 <- 
+      get_data(query = paste0(
+        "SELECT a.serialno, a.date,a.perm_id, b.name,a.day_birth, a.mon_birth, a.yea_birth, a.sex,b.mother_nam,
+        b.father_nam, b.head_nam, a.region_nam,a.resprate,a.weigth, a.temp, a.fever2yno, a.slidesyno,
+        a.slideswhy, a.stoolsyno, a.stoolswhy,a.feveryno, a.feverdays, a.coughyno,  a.coughdays,
+        a.breathyno, a.diarryno, a.diarrdays, a.diarrnum, a.diarchar, a.vomityno,  a.vomitdays,
+        a.othersymp, a.fontanelle, a.deshidrat, a.pallor, a.jaundice, a.oedema, a.eardischar,
+        a.indrawin,  a.nasa_flar, a.cra_cre_bt, a.wheeze_ron, a.hepatomega, a.splenomega,  a.neck_stiff,
+        a.diag1, a.diag2, a.diag3, a.afterpcd, a.treatment, a.fiel_wrkr, a.afterinp, a.dataclerk1,  a.dataclerk2,
+        a.data_time1, a.data_time2, a.data_clerk, a.data_statu,  a.data_date,  a.accidenyno,  a.brady, a.burnyno,
+        a.fittednum,a.fittedyno, a.foldskin,  a.lethargic, a.ssblo, a.ssdia, a.ssran, a.under5,  a._id,a._convertstamp
+        FROM cism.dbf_opd3 a inner join phi.dbf_opd3 b on a.serialno =b.serialno limit 1000000"),
+        connection_object = con)
+    
+    dbf_opd4 <- get_data(query = paste0(
+      "SELECT a.serialno,a.date, a.perm_id,b.name,a.day_birth,a.mon_birth, a.yea_birth, a.sex,b.mother_nam,b.father_nam,
+      b.head_nam,a.region_nam, a.resprate,a.weigth, a.temp,a.fever2yno,a.slidesyno,    a.slideswhy,a.feveryno,
+      a.feverdays, a.coughyno,a.coughdays, a.breathyno,a.diarryno,a.diarrdays,a.diarrnum,a.foldskin,a.diarchar,
+      a.vomityno,a.vomitdays, a.othersymp, a.fontanelle,a.deshidrat, a.pallor,a.jaundice,a.oedema, a.eardischar,
+      a.indrawin,a.nasa_flar,a.cra_cre_bt, a.wheeze_ron,a.hepatomega,a.splenomega,a.neck_stiff,a.lethargic,
+      a.diag1,a.diag2, a.diag3,a.afterpcd,a.brady,a.fittedyno,a.fittednum, a.burnyno,a.accidenyno,a.place,
+      a.referred,a.ref_serial,a.studyno,a.thicksmear, a.ttopcd1,a.ttopcd2,a.ttopcd3,a.ttopcd4,a.fieldwrk1,
+      a.icd_diag1,a.icd_diag2,a.icd_diag3,a.aftericd,a.ttoicd1,a.ttoicd2, a.ttoicd3, a.ttoicd4, a.filedwrk2,
+      a.fieldwrk3, a.dataclerk1,a.dataclerk2,a.data_time1,a.data_time2,a.data_clerk,a.data_statu,a.data_date,
+      a.hto, a.breathdays, a.brady2, a._id,a._convertstamp
+      FROM cism.dbf_opd4 a inner join phi.dbf_opd4 b on a.serialno =b.serialno limit 10000000"),
+      connection_object = con)
+    
+    
+    dbf_opd5 <- get_data(query = paste0(
+      "SELECT a.serialno,a.date,a.perm_id,b.name,a.day_birth,a.mon_birth,a.yea_birth,a.sex,b.mother_nam,b.father_nam,
+      b.head_nam,a.region_nam,a.resprate,a.weigth,a.temp,a.fever2yno,a.slidesyno,a.slideswhy,a.feveryno,a.feverdays,a.coughyno,
+      a.coughdays,a.breathyno,a.diarryno,a.diarrdays,a.diarrnum,a.foldskin,a.diarchar,a.vomityno,a.vomitdays,a.othersymp,
+      a.fontanelle,a.deshidrat,a.pallor,a.jaundice,a.oedema,a.eardischar,a.indrawin,a.nasa_flar,a.cra_cre_bt,a.wheeze_ron,
+      a.hepatomega,a.splenomega,a.neck_stiff,a.lethargic,a.diag1,a.diag2,a.diag3,a.afterpcd,a.brady,a.fittedyno,a.fittednum,
+      a.burnyno,a.accidenyno,a.place,a.referred,a.ref_serial,a.studyno,a.thicksmear,a.ttopcd1,a.ttopcd2,a.ttopcd3,a.ttopcd4,
+      a.fieldwrk1,a.icd_diag1,a.icd_diag2,a.icd_diag3,a.aftericd,a.ttoicd1,a.ttoicd2,a.ttoicd3,a.diag4,a.filedwrk2,a.fieldwrk3,
+      a.dataclerk1,a.dataclerk2,a.data_time1,a.data_time2,a.data_clerk,a.data_statu,a.data_date,a.hto,a.breathdays,a.brady2,
+      a.qesnum,a.ttoicd4,a.bradytime,a.rdt,a._id,a._convertstamp
+      FROM cism.dbf_opd5 a inner join phi.dbf_opd5 b on a.serialno=b.serialno limit 100000000"),
+      connection_object = con)
+    
+    
+    oc_opd_2014 <- get_data(query = paste0(
+      "SELECT a.serialno,a.date,a.perm_id,b.name,a.day_birth,a.mon_birth,a.yea_birth,a.sex,b.mother_nam,b.father_nam,b.head_nam,
+      a.region_nam,a.resprate,a.weigth,a.temp,a.fever2yno,a.slidesyno,a.slideswhy,a.feveryno,a.feverdays,a.coughyno,a.coughdays,
+      a.breathyno,a.diarryno,a.diarrdays,a.diarrnum,a.foldskin,a.diarchar,a.vomityno,a.vomitdays,a.othersymp,a.fontanelle,
+      a.deshidrat,a.pallor,a.jaundice,a.oedema,a.eardischar,a.indrawin,a.nasa_flar,a.cra_cre_bt,a.wheeze_ron,a.hepatomega,
+      a.splenomega,a.neck_stiff,a.lethargic,a.diag1,a.diag2,a.diag3,a.afterpcd,a.brady,a.fittedyno,a.fittednum,a.burnyno,
+      a.accidenyno,a.place,a.referred,a.ref_serial,a.studyno,a.thicksmear,a.ttopcd1,a.ttopcd2,a.ttopcd3,a.ttopcd4,
+      a.fieldwrk1,a.icd_diag1,a.icd_diag2,a.icd_diag3,a.aftericd,a.ttoicd1,a.ttoicd2,a.ttoicd3,a.diag4,a.filedwrk2,
+      a.fieldwrk3,a.dataclerk1,a.dataclerk2,a.data_time1,a.data_time2,a.data_clerk,a.data_statu,a.data_date,
+      a.hto,a.breathdays,a.brady2,a.qesnum,a.ttoicd4,a.bradytime,a.rdt,a.crfstatus,a._id,a._convertstamp
+      FROM cism.oc_opd5_2014 a inner join phi.oc_opd5_2014 b on a.serialno=b.serialno limit 1000000"),
+      connection_object = con)
+    
+    oc_opd_2015 <- get_data(query = paste0(
+      "SELECT a.serialno,a.date,a.perm_id,b.name,a.day_birth,a.mon_birth,a.yea_birth,a.sex,b.mother_nam,b.father_nam,b.head_nam,
+      a.region_nam,a.resprate,a.weigth,a.temp,a.fever2yno,a.slidesyno,a.slideswhy,a.feveryno,a.feverdays,a.coughyno,a.coughdays,
+      a.breathyno,a.diarryno,a.diarrdays,a.diarrnum,a.foldskin,a.diarchar,a.vomityno,a.vomitdays,a.othersymp,a.fontanelle,
+      a.deshidrat,a.pallor,a.jaundice,a.oedema,a.eardischar,a.indrawin,a.nasa_flar,a.cra_cre_bt,a.wheeze_ron,a.hepatomega,
+      a.splenomega,a.neck_stiff,a.lethargic,a.diag1,a.diag2,a.diag3,a.afterpcd,a.brady,a.fittedyno,a.fittednum,a.burnyno,
+      a.accidenyno,a.place,a.referred,a.ref_serial,a.studyno,a.thicksmear,a.ttopcd1,a.ttopcd2,a.ttopcd3,a.ttopcd4,
+      a.fieldwrk1,a.icd_diag1,a.icd_diag2,a.icd_diag3,a.aftericd,a.ttoicd1,a.ttoicd2,a.ttoicd3,a.diag4,a.filedwrk2,
+      a.fieldwrk3,a.dataclerk1,a.dataclerk2,a.data_time1,a.data_time2,a.data_clerk,a.data_statu,a.data_date,
+      a.hto,a.breathdays,a.brady2,a.qesnum,a.ttoicd4,a.bradytime,a.rdt,a.crfstatus,a._id,a._convertstamp
+      FROM cism.oc_opd5_2015 a inner join phi.oc_opd5_2015 b on a.serialno=b.serialno limit 100000000"),
+      connection_object = con)
+    
+    oc_opd_2016 <- get_data(query = paste0(
+      "SELECT a.serialno,a.date,a.perm_id,b.name,a.day_birth,a.mon_birth,a.yea_birth,a.sex,b.mother_nam,b.father_nam,b.head_nam,
+      a.region_nam,a.resprate,a.weigth,a.temp,a.fever2yno,a.slidesyno,a.slideswhy,a.feveryno,a.feverdays,a.coughyno,a.coughdays,
+      a.breathyno,a.diarryno,a.diarrdays,a.diarrnum,a.foldskin,a.diarchar,a.vomityno,a.vomitdays,a.othersymp,a.fontanelle,
+      a.deshidrat,a.pallor,a.jaundice,a.oedema,a.eardischar,a.indrawin,a.nasa_flar,a.cra_cre_bt,a.wheeze_ron,a.hepatomega,
+      a.splenomega,a.neck_stiff,a.lethargic,a.diag1,a.diag2,a.diag3,a.afterpcd,a.brady,a.fittedyno,a.fittednum,a.burnyno,
+      a.accidenyno,a.place,a.referred,a.ref_serial,a.studyno,a.thicksmear,a.ttopcd1,a.ttopcd2,a.ttopcd3,a.ttopcd4,
+      a.fieldwrk1,a.icd_diag1,a.icd_diag2,a.icd_diag3,a.aftericd,a.ttoicd1,a.ttoicd2,a.ttoicd3,a.diag4,a.filedwrk2,
+      a.fieldwrk3,a.dataclerk1,a.dataclerk2,a.data_time1,a.data_time2,a.data_clerk,a.data_statu,a.data_date,
+      a.hto,a.breathdays,a.brady2,a.qesnum,a.ttoicd4,a.bradytime,a.rdt,a.crfstatus,a._id,a._convertstamp
+      FROM cism.oc_opd5_2016 a inner join phi.oc_opd5_2016 b on a.serialno=b.serialno limit 10000000"),
+      connection_object = con)
+    
+    ## Append the datasets 
+    opd <- plyr::rbind.fill(dbf_opd3,dbf_opd4,dbf_opd5,oc_opd_2016,oc_opd_2015, oc_opd_2014)
+    
+    save(opd,
+         file = 'data/opd_dirty.RData')
+    
+    ## rm partial data sets
+    rm(dbf_opd3,dbf_opd4,dbf_opd5,oc_opd_2016,oc_opd_2015, oc_opd_2014)
+  }
   
   # Clean up health Facility ###############
   opd <-
@@ -210,8 +307,8 @@ if('opd_cleaned.RData' %in% dir('data')){
                             opd$day_birth))
   # replace dob=. if dob>date
   opd$dob <- if_else(opd$dob > opd$date,
-                    NA,
-                    opd$dob)
+                     NA,
+                     opd$dob)
   # *Age ################## 
   # 
   # *In Months 
@@ -546,18 +643,22 @@ if('opd_cleaned.RData' %in% dir('data')){
   # }
   
   ## Establish a connection using the servolabr package
+  # (Run the below to install the package)
   # library(devtools)
   # library(roxygen2)
   # document('ServolabR/'); install('ServolabR/')
+  library(ServolabR)
   servo_credentials <- read.delim('credentials/servo_lab_credentials.txt',
                                   header = FALSE)$V1
   servo_credentials <- as.character(servo_credentials)
   servo <- ServolabGetConnection("172.16.234.223",
                                  servo_credentials[1],
                                  servo_credentials[2])
-  xmag <-ServolabGetResultsByNidas(nidasVector = xnidas, methodID = 1802, servoConnection = servo)  
+  xmag <-ServolabGetResultsByNidas(nidasVector = xnidas, 
+                                   methodID = 1802, 
+                                   servoConnection = servo)  
   xmag$nida <- as.character(xmag$nida)
-
+  
   # *Packed Cell Volume (PCV) --> IMPORT FROM SERVOLAB  # ASK BEA
   # /*replace pcv=. if date<mdy(08,27,1998)
   # gen an33=(pcv<33) if pcv!=.
@@ -607,7 +708,7 @@ if('opd_cleaned.RData' %in% dir('data')){
   opd <- opd %>%
     filter(date >= '1997-07-01',
            date <= '2016-06-30')
-
+  
   # gen season=.
   opd$season <- NA
   # replace season=1 if date>=d(01jul1997) & date <= d(30jun1998)
