@@ -14,27 +14,275 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(comment = NA, 
+               echo = FALSE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
 ```
 
-# Status
+```{r}
+# Packages
+library(ggplot2)
+library(cism)
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+# Read in data
+source('prepare_data.R')
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+# Introduction
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+This is an informal document whose purpose is to guide the conversation (on 2016-12-19) between Quique, Bea, and Joe. It consists of a list of issue-question pairs. This list is not meant to be comprehensive (ie, there are likely other issues to be discussed as well).
+
+## Malaria trends
+
+### Issue
+
+
+The apparent decline in Malaria in the last 10 years is not reflected in OPD data. In fact, if anything, OPD data would suggest a flatlining, as ilustrated in the first two charts below.
+
+```{r}
+# Get malaria over time
+mot <- opd %>%
+  filter(malaria) %>%
+  group_by(date) %>%
+  tally
+
+ggplot(data = mot,
+       aes(x = date,
+           y = n)) +
+  geom_point(alpha = 0.2, color = 'orange') +
+  theme_cism() +
+  geom_line(alpha = 0.6, color = 'orangered') +
+  labs(x = 'Date',
+       y = 'Cases',
+       title = 'Malaria cases in < 15 year-olds',
+       subtitle = 'OPD data, daily')
+
+# Get malaria over time at year level
+mot <- opd %>%
+  filter(malaria) %>%
+  mutate(year = as.numeric(format(date, '%Y'))) %>%
+  group_by(year) %>%
+  tally
+
+ggplot(data = mot,
+       aes(x = year,
+           y = n)) +
+  geom_bar(stat = 'identity',
+           alpha = 0.6, fill = 'darkgreen') +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Cases',
+       title = 'Malaria cases in < 15 year-olds',
+       subtitle = 'OPD data, yearly')
+
+# Get distribution
+mot <- opd %>%
+  filter(malaria) %>%
+  group_by(date) %>%
+  tally
+ggplot(data = mot,
+       aes(x = n)) +
+  geom_histogram(alpha = 0.6,
+                 color = 'darkgreen',
+                 fill = 'darkorange') +
+  theme_cism() +
+  labs(x = 'Cases',
+       y = 'Count',
+       title = 'Distribution of daily malaria cases')
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
-# Main issue
+### Question
+
+- How reliable and comprehensive are OPD data?
+
+- What explains the dip and and rise (U-shape) in the second chart above?
+
+- There are a few days of "extreme" high counts (as many as 300 cases in one day)? Are these to be trusted?
+
+## ICD codes
+
+### Issue
+
+There are _many_ different ICD codes, at different locations in the data, and with different validation systems. Some are compliant with ICD-9, others with ICD-10, others non-compliant. See below for all codes.
+
+
+```{r}
+icd_columns <-
+  names(opd)[grepl('icd', names(opd))]
+icd_columns <- icd_columns[icd_columns != 'aftericd']
+
+x <- paste0(sort(unique(unlist(opd[,icd_columns]))), collapse = ', ')
+```
+
+<sub>`r x`</sub>
+
+### Question
+
+Are ICD codes useful for our analyses?
+
+If so, any tips on understanding how best to code these? We can merge with ICD dictionaries, but want to understand what coding paradigms were used, when they were used, and what info we might be missing in ICD linkages.
+
+## Person-time at risk
+
+### Issue
+
+Joe has re-constructed the person-time at risk dataset (Llorenç's "BaseTMR" method). Our "denominator" (ie, the total amount of person-time at risk) is clearly imperfect. This appears to be the result of the different rounds of census data collection activity.
+
+The below chart illustrates at least two problems:
+
+1. Unnaturally fast growth (ie, 16,000 to 50,000 in just 15 years).
+
+2. Unnaturally "clunky" growth (ie, spikes).
+
+
+
+```{r}
+# Create a daily ptar
+ptar <- etar %>%
+  group_by(date) %>% 
+  tally
+
+# Plot it
+ggplot(data = ptar,
+       aes(x = date, y = n)) +
+  geom_area(alpha = 0.6,
+            fill = 'orangered') +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Number of people',
+       title = 'Person time at risk',
+       subtitle = 'Only < 15 year-olds, non-expanded census area')
+```
+
+### Question
+
+What do we do about this? I see 3 possible solutions.
+
+*Solution 1*: Remove all observations before September, 2002.
+
+```{r}
+ggplot(data = ptar %>%
+         filter(date >= '2002-09-01'),
+       aes(x = date, y = n)) +
+  geom_line(color = 'darkgreen', alpha = 0.6) +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Number of people',
+       title = 'Solution 1: September 2002 onwards',
+       subtitle = 'Only < 15 year-olds, non-expanded census area')
+```
+
+In the above chart, there are still abnormal spikes / increases, but the abnormally low period at the beginning of the study period has been removed.
+
+*Solution 2*: Restrict dates (like in solution 1), but also apply a smoothing algorithm to better estimate population.
+
+```{r}
+ggplot(data = ptar %>%
+         filter(date >= '2002-09-01'),
+       aes(x = date, y = n)) +
+  geom_smooth(color = 'darkgreen', alpha = 0.6) +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Number of people',
+       title = 'Solution 2: Smooth like peanut butter',
+       subtitle = 'Only < 15 year-olds, non-expanded census area')
+```
+
+*Solution 3*: Interpolate / estimate local population growth using national level data and back-applying it to our study one.
+
+```{r}
+fake_data <- ptar
+fit <- lm(n ~ date, data = fake_data)
+fake_data$n<- predict(fit, fake_data)
+fake_data$src <- 'Interpolated (fake)'
+fake_data <-
+  bind_rows(fake_data,
+            ptar %>%
+              mutate(src = 'Real data'))
+ggplot(data = fake_data %>%
+         filter(date >= '2002-09-01'),
+       aes(x = date, y = n,
+           group = src, color = src)) +
+  geom_line(alpha = 0.6) +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Number of people',
+       title = 'Solution 3: Estimation',
+       subtitle = 'Only < 15 year-olds, non-expanded census area') +
+  scale_color_manual(name = '',
+                     values = c('darkgreen', 'darkorange'))
+```
+
+## Other potential sources of bias
+
+### Issue
+
+Bea and Joe don't "know" the OPD data very well, so we're not aware of which logistical, clinical, or operational factors may be biasing our data.
+
+### Question
+
+Is there anything specific we need to know about? This includes (but is not limited to) changes in testing protocols, changes in catchment areas, etc.?
+
+## "Knowledge products" (papers)
+
+
+### Issue
+
+Bea and Joe have discussed, and see several papers coming out of this OPD / malaria analysis.
+
+*PAPER 1: TRENDS AND PATHOGENESIS*
+
+This would be similar to Bea's Ilha Josina paper, but expanded. Descriptive epidemiology. It would cover:
+
+- What are trends in malaria in Manhica over last 20 years?
+- What is the profile of clinical malaria cases (replicate Ilha Josina), with more detail into symptoms, outcomes, etc.
+- What are the breakdowns of malaria species over time / place?
+- What is the attributible fraction of parasitemia to fever and to anemia? And how has this changed over time?
+
+*PAPER 2: SPATIAL TEMPORAL ANALYSIS - general*:
+
+This would be a bit more technical / methodological paper. Though using specific data for Manhiça, it would try to be generalizable to malaria control/elimination campaigns by providing a methodological and analytical framework along with some operational implications. It would cover:
+- Are there hotspots?
+- Have hotspots changed over time? 
+  - Can we assume that when there is a clinical index case will it always drive you back to an area of community prevalence?
+    - Do incidence and prevalence travel together (spatial-temporal analysis)?
+- Should a program manager rely on prevalence data, or real-time incidence data?
+
+*PAPER 3: SPATIAL TEMPORAL ANALYSIS - specific*:
+
+This would be a bit more specific to Manhiça, methods would be less complex/elegant, but it would be more practical and actionable at the local level. Basically, this paper would encompass Quique and Joe's original idea to do a "hotspots identification" study (approved by CCI back in June). In addition to identifying hotspots, this paper would fully exploit census data so as to explore risk in Manhiça over time.
+
+*PAPER 4: VECTOR CONTROL'S EFFECT*:
+
+This is a simple impact assessment paper, which would address the following questions: To what extent does vector control protect populations? In order to answer this, we would:
+- Look at MALDEMO quesionnaire in census.
+- Examine a potential differential effect of vector control by socioeconomic status.
+
+
+*PAPER 5: HEALTH SEEKING BEHAVIOR*:
+
+This would be a bit more of a social science paper, with an economics spin focusing on equality, equity, and behavioral economics. Specifically, it would examine health-seeking behavior through a guiding question: at equality of illness, what factors determine one's likelihood of seeking care?
+
+### Question
+
+Quique, do you agree with the above breakdown of papers? Are there any you would add, remove, combine, change?
+
+## Authorship and timeline
+
+### Issue
+
+We are multiple people (Bea, Joe, Quique, plus CISM collaborators, ISGlobal collaborators, Pedro Alonso, etc.), with multiple goals and obligations. Having a general idea of who will "own" each sub-project will help to distribute work and prioritize (and avoid potential future unpleasantries). Additionally, so as to not waste too much time, we should come up with a prioritized timeline for analysis and publication.
+
+### Question
+
+- Who should be first/senior authors on the above papers?
+- What should the order of priority be?
+
+# Details
+
+This report was prepared in R markdown. All code is available at  <github.com/joebrew/hotspots> .

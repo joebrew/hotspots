@@ -647,18 +647,18 @@ if('opd_cleaned.RData' %in% dir('data')){
   # library(devtools)
   # library(roxygen2)
   # document('ServolabR/'); install('ServolabR/')
-  library(ServolabR)
-  servo_credentials <- read.delim('credentials/servo_lab_credentials.txt',
-                                  header = FALSE)$V1
-  servo_credentials <- as.character(servo_credentials)
-  servo <- ServolabGetConnection("172.16.234.223",
-                                 servo_credentials[1],
-                                 servo_credentials[2])
-  xmag <-ServolabGetResultsByNidas(nidasVector = xnidas, 
-                                   methodID = 1802, 
-                                   servoConnection = servo)  
-  xmag$nida <- as.character(xmag$nida)
-  
+  # library(ServolabR)
+  # servo_credentials <- read.delim('credentials/servo_lab_credentials.txt',
+  #                                 header = FALSE)$V1
+  # servo_credentials <- as.character(servo_credentials)
+  # servo <- ServolabGetConnection("172.16.234.223",
+  #                                servo_credentials[1],
+  #                                servo_credentials[2])
+  # xmag <-ServolabGetResultsByNidas(nidasVector = opd$nida, 
+  #                                  methodID = 1802, 
+  #                                  servoConnection = servo)  
+  # xmag$nida <- as.character(xmag$nida)
+  # 
   # *Packed Cell Volume (PCV) --> IMPORT FROM SERVOLAB  # ASK BEA
   # /*replace pcv=. if date<mdy(08,27,1998)
   # gen an33=(pcv<33) if pcv!=.
@@ -754,26 +754,29 @@ if('opd_cleaned.RData' %in% dir('data')){
   # 
   # 
   # # # USE PDF TO GET EXAM FISICO AND DIAGNOSIS (WHO ICD codes) #################
-  # # Use this ICD package: https://jackwasey.github.io/icd/
-  # icd_columns <-
-  #   names(opd)[grepl('icd', names(opd))]
-  # icd_columns <- icd_columns[icd_columns != 'aftericd']
-  # 
-  # # Create explanation columns
-  # for (j in 1:length(icd_columns)){
-  #   opd[,paste0(icd_columns[j],
-  #               '_explanation')] <- NA
-  # }
-  # for (j in 1:length(icd_columns)){
-  #   the_column <- opd[,icd_columns[j]]
-  #   the_column <- as.character(the_column)
-  #   result <- ifelse(is.na(the_column),
-  #                    NA,
-  #                    icd9Explain(the_column))
-  #   opd[,paste0(icd_columns[j],
-  #               '_explanation')] <- result
-  # }
-  
+  # Use this ICD package: https://jackwasey.github.io/icd/
+  # library(devtools) 
+  # devtools::install_github("wtcooper/icdcoder")
+  # library(icdcoder)
+  icd_columns <-
+    names(opd)[grepl('icd', names(opd))]
+  icd_columns <- icd_columns[icd_columns != 'aftericd']
+
+  # Create explanation columns
+  for (j in 1:length(icd_columns)){
+    opd[,paste0(icd_columns[j],
+                '_explanation')] <- NA
+  }
+  for (j in 1:length(icd_columns)){
+    the_column <- opd[,icd_columns[j]]
+    the_column <- as.character(the_column)
+    the_column[the_column == ''] <- NA
+    the_column <- trimws(the_column, which = 'both')
+    result <- icd9Explain(the_column)
+    opd[,paste0(icd_columns[j],
+                '_explanation')] <- result
+  }
+
   # Create a simple malaria boolean
   opd$malaria <- 
     ifelse(opd$malpos == 'Pos',

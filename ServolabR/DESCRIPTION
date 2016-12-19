@@ -1,0 +1,16 @@
+Package: ServolabR
+Type: Package
+Title: Get results from Servolab
+Version: 0.2
+Date: 2016-05-30
+Author: Agnaldo Samuel
+Maintainer: Who to complain to <agnaldo.samuel@manhica.net>
+Description: The package contains a set of function to connect and extract lab
+    results from servolab .
+License: What license is it under?
+LazyData: TRUE
+RoxygenNote: 5.0.1.9000
+Depends:
+    RJDBC
+NeedsCompilation: no
+Packaged: 2016-12-05 09:49:50 UTC; agnaldo
