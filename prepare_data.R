@@ -17,6 +17,7 @@ library(icd)
 library(cism)
 library(data.table)
 library(DBI)
+library(readxl)
 
 if('opd_cleaned.RData' %in% dir('data')){
   load('data/opd_cleaned.RData')
@@ -812,6 +813,10 @@ if('census_data.RData' %in% dir('data')){
        file = 'data/census_data.RData')
 }
 
+# Read in expansion data
+expansion <- read_excel('data/Bairros de area de Expansao_Demo.xls',
+                        skip = 3)$Bairro
+
 # Create a time at risk dataset for the opd period
 if('cleaned_time_at_risk.RData' %in% dir('data')){
   load('data/cleaned_time_at_risk.RData')
@@ -826,7 +831,7 @@ if('cleaned_time_at_risk.RData' %in% dir('data')){
   # (ie, bairro <= 3499) (need to confirm with charfudin)
   tar$bairro <- as.numeric(as.character(substr(tar$locationName, 1, 4)))
   tar <- tar %>%
-    filter(bairro <= 3499)
+    filter(!bairro %in% expansion)
   
   # Keep only those who are < 15 (since this is the OPD cut-off)
   # at the start date
