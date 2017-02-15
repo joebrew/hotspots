@@ -1,0 +1,121 @@
+---
+title: "Clinical malaria trends"
+subtitle: "2002-2016"
+author: "Bea and Joe"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+library(cism)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(tidy = FALSE, 
+                      cache.extra = packageVersion('tufte'),
+                      echo = FALSE)
+options(htmltools.dir.version = FALSE)
+```
+
+
+
+# Analysis
+
+## OPD
+
+### Absolute number of malaria cases over time
+
+```{r}
+x <- opd %>%
+  mutate(month=format(date, "%m"),
+         year=format(date, "%Y")) %>%
+  group_by(year, month) %>%
+  summarise(totvis=n(),
+            malcase=length(which(malaria))) %>%
+  mutate(malprev=malcase/totvis) %>%
+  mutate(dumdate=as.Date(paste0(year, "-", month, "-15")))
+
+library(ggthemes)  
+library(cism)
+ggplot(data=x, 
+       aes(x=dumdate, y=malcase)) +
+  geom_area(aes(x=dumdate, y=totvis), color="blue", fill="blue") +
+  geom_line(fill="red") +
+  labs(title="OPD Visits and Malarias", x="Date", y="Cases") +
+  theme_economist()
+  
+```
+
+#### By age group
+
+Age groups should be divided differently than previously^[<1, 1-3, 3-5, 5-10, 10-15]
+
+### Malaria cases over time (relative to all OPD cases)
+
+#### By age group
+
+### Incidence: Malaria cases over time (relative to population at risk)
+
+### Clinical profile of malaria
+
+*What does non-complicated malaria look like over time?*
+
+- Parasite densitites^[We still need servolab stuff]
+- Body temperature
+- Hemoglobin
+- Age distributions over time
+
+#### Age group analysis
+
+Cohort analysis with time-standardized x axis and cohort colored lines
+
+(Everything up to here is for Katarina's paper)
+
+### Hotspot identifical / Spatial scan statistic
+
+Bayesian spatial-temporal analysis
+
+Validate using actual locations.
+
+Compare clinical hotspots from OPD with community hotspots from xmal.
+
+
+
+## INPD trends
+
+### Absolute cases over time
+
+### Cases as percentage of all INPD cases over time
+
+### Case fatality rate 
+
+Use census as denominator
+
+#### Over time
+
+#### By geography
+
+#### Spatio-temporal
+
+### Risk factors for death
+
+Matched case-control (or multinomial logistic regression) between:
+
+1. In the field (asymptomatic, in the field, from xmal)
+2. In the OPD (symptomatic, but quick to recover)
+3. In the INPD (symptomatic, severe malaria)
+
+Loop in Quique and Alfredo^[He looks at parasite differences that cause severe vs. asymptomatic]
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```

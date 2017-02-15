@@ -204,7 +204,7 @@ if('opd_cleaned.RData' %in% dir('data')){
     # destring referred, replace 
     mutate(referred = as.numeric(as.character(referred))) %>%
     # replace referred=. if (referred<1 | referred>2)
-    mutate(ifelse(referred < 1 | referred > 2, NA, referred))
+    mutate(referred = ifelse(referred < 1 | referred > 2, NA, referred))
   
   # OUTPATIENT INFORMATION #############################
   
@@ -636,7 +636,8 @@ if('opd_cleaned.RData' %in% dir('data')){
   opd$rdt <- ifelse(opd$rdt == 1, 'Pos',
                     ifelse(opd$rdt == 2, 'Neg', NA))
   # SERVOLAB 
-  # # Source servolab functions (Agnaldo's work)
+  # Source servolab functions (Agnaldo's work)
+  library(ServolabR)
   # servo_lab_functions <- dir('servo_lab_functions/')
   # for (i in 1:length(servo_lab_functions)){
   #   source(paste0('servo_lab_functions/',
@@ -655,10 +656,18 @@ if('opd_cleaned.RData' %in% dir('data')){
   # servo <- ServolabGetConnection("172.16.234.223",
   #                                servo_credentials[1],
   #                                servo_credentials[2])
-  # xmag <-ServolabGetResultsByNidas(nidasVector = opd$nida, 
-  #                                  methodID = 1802, 
-  #                                  servoConnection = servo)  
-  # xmag$nida <- as.character(xmag$nida)
+  # nidas <- data_frame(nida = as.character(sort(unique(opd$nida))))
+  # nidas <- nidas[!is.na(nidas$nida),]
+  # x <- rep(NA, length(nidas$nida))
+  # for (i in 1:length(x)){
+  #   message(i)
+  #   x[i] <-ServolabGetResultsByNidas(nidasVector = nidas$nida[i],
+  #                                 methodID = c(1802, 1813),
+  #                                 servoConnection = servo)
+  # }
+  # 
+  # 
+  # # Join back to opd
   # 
   # *Packed Cell Volume (PCV) --> IMPORT FROM SERVOLAB  # ASK BEA
   # /*replace pcv=. if date<mdy(08,27,1998)
@@ -861,3 +870,59 @@ if('cleaned_time_at_risk.RData' %in% dir('data')){
   save(etar,
        file = 'data/cleaned_time_at_risk.RData')
 }
+
+if(file.exists('data/cleaned_inpd.RData')){
+  load('data/cleaned_inpd.RData')
+} else {
+
+  # Read in inpd data
+  inpd <- readr::read_csv('data/inpd_2016-01-22.csv')
+  
+  # Clean up dates
+  inpd$date <-
+    as.Date(inpd$date,
+            format = '%d%b%Y')
+  inpd$dish_date <-
+    as.Date(inpd$dish_date,
+            format = '%d%b%Y')
+  
+  # Clean up fever
+  inpd$fever <-
+    ifelse(inpd$feveryno == 1, TRUE,
+           ifelse(inpd$feveryno == 2, FALSE,
+                  NA))
+  
+  # Clean up diarrhea
+  inpd$diarrhea <-
+    ifelse(inpd$diarryno == 1, TRUE,
+           ifelse(inpd$diarryno == 2, FALSE,
+                  NA))
+  
+  # Keep only those dates beginning in 2001 
+  # (everyting prior is sporadic)
+  inpd <- inpd %>%
+    filter(date >= '2001-01-01')
+  
+  # Keep only those 0-15 years old, like opd
+  inpd$dob <- 
+    as.Date(paste0(inpd$yea_birth, '-',
+           inpd$mon_birth, '-',
+           inpd$day_birth))
+  inpd <- inpd %>%
+    mutate(age = as.numeric(date - dob) / 365.25) %>%
+    filter(age >= 0,
+           age < 15)
+  
+  # Get malaria (mal_tt? ask bea)
+  inpd <- inpd %>%
+    mutate(malaria = ifelse(mal_tt == 1, TRUE,
+                            ifelse(mal_tt == 2, FALSE,
+                                   NA)))
+  
+  # 
+  
+  save(inpd,
+       file = 'data/cleaned_inpd.RData')
+  
+}
+
