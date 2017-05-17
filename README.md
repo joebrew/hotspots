@@ -11,7 +11,7 @@ Beatriz Galatas
 
 - Clone the repository
 - Create a data folder (ignored by git) and place into that folder a `.csv` of the raw OPD data named "opd_YYYY-mm-dd.csv" (for example, "opd_2016-05-26.csv").
-- Run the "clean_opd.R" script, based loosely on Bea Galatas' "misc/opd_cleaning_joe.do", in order to clean the .csv and produce a dataframe ready for analysis.
+- Run the "prepare_data.R" script, based loosely on Bea Galatas' "misc/opd_cleaning_joe.do", in order to clean the .csv and produce a dataframe ready for analysis.
 - Run the "create_time_at_risk.R" script, written by Joe Brew, in order to clean the `ohds_basetmr.dta` data, and convert into "long" person-time-at-risk format.
 
 ## Datasets

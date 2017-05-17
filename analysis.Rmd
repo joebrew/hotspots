@@ -1,7 +1,7 @@
 ---
 title: "Clinical malaria trends"
 subtitle: "2002-2016"
-author: "Bea and Joe"
+author: ""
 date: "`r Sys.Date()`"
 output:
   tufte::tufte_html: default
@@ -16,51 +16,385 @@ link-citations: yes
 ---
 
 ```{r setup, include=FALSE}
-library(tufte)
-library(cism)
-# invalidate cache when the tufte version changes
-knitr::opts_chunk$set(tidy = FALSE, 
-                      cache.extra = packageVersion('tufte'),
-                      echo = FALSE)
-options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(comment = NA, 
+               echo = FALSE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
 ```
 
+```{r}
+library(tufte)
+library(cism)
+library(ggplot2)
+library(ggthemes)  
+library(cism)
+library(tidyr)
+library(RColorBrewer)
+
+# Prepare data
+source('prepare_data.R')
+```
+
+Quique Bassat, Joe Brew, Bea Galatas^[Collaborators list is non-exhaustive and alphabetical.]
 
 
 # Analysis
 
 ## OPD
 
-### Absolute number of malaria cases over time
+### OPD: Absolute number of malaria cases over time
+
+The below chart shows the 
 
 ```{r}
 x <- opd %>%
   mutate(month=format(date, "%m"),
          year=format(date, "%Y")) %>%
   group_by(year, month) %>%
-  summarise(totvis=n(),
-            malcase=length(which(malaria))) %>%
-  mutate(malprev=malcase/totvis) %>%
+  summarise(all=n(),
+            malaria=length(which(malaria))) %>%
+  mutate(p=malaria/all) %>%
+  mutate(no_malaria = all - malaria) %>%
   mutate(dumdate=as.Date(paste0(year, "-", month, "-15")))
 
-library(ggthemes)  
-library(cism)
-ggplot(data=x, 
-       aes(x=dumdate, y=malcase)) +
-  geom_area(aes(x=dumdate, y=totvis), color="blue", fill="blue") +
-  geom_line(fill="red") +
-  labs(title="OPD Visits and Malarias", x="Date", y="Cases") +
+x_g <- gather(x, key, value, all:no_malaria)
+x_g <- x_g %>%
+         filter(key %in% c('malaria', 'no_malaria'))
+x_g$key <- Hmisc::capitalize(gsub('_', ' ', x_g$key))
+x_g$key <- factor(x_g$key, levels = rev(sort(unique(x_g$key))))
+
+ggplot(x_g,
+       aes(x = dumdate, 
+           y = value,
+           group = key,
+           fill = key)) +
+  geom_area(pos = 'stack', 
+            alpha = 0.6,
+            color = 'black',
+            lwd = 0.3) +
+  scale_fill_manual(name = '',
+                    values = c('darkgreen', 'darkorange')) +
+  labs(x = 'Date',
+       y = 'Cases',
+       title = 'Malaria and non-malaria cases over time',
+       subtitle = 'OPD data') +
   theme_economist()
-  
 ```
 
+Clearly in the above chart, seasonality is driven by malaria. That said, even among non-malaria cases, there still appear to be seasonal trends.
+
+```{r}
+no_malaria <- x_g %>%
+         filter(key == 'No malaria')
+ggplot(data = no_malaria) +
+  geom_area(aes(x = dumdate, y = value),
+            fill = 'darkgreen', alpha= 0.6,
+            lwd = 0.3,
+            color = 'black') +
+    labs(x = 'Date',
+       y = 'Cases',
+       title = 'Non-malaria cases over time',
+       subtitle = 'OPD data') +
+  theme_economist()
+```
+
+We can explore seasonality further by looking at each year.
+
+```{r}
+cols <- colorRampPalette(brewer.pal(n = 9, name = 'Spectral'))(length(unique(no_malaria$year)))
+ggplot(data = no_malaria,
+       aes(x = as.Date(paste0('1900-', as.numeric(month), '-01')),
+           y = value,
+           group = year,
+           color = year)) +
+  geom_line() +
+  scale_color_manual(name = 'Year',
+                     values = cols) +
+  labs(x = 'Month',
+       y = 'Cases',
+       title = 'Non-malaria cases seasonality',
+       subtitle = 'Each line is one year') +
+  theme_economist() +
+  scale_x_date(date_labels = "%b")
+
+```
+
+Malaria as a percentage of all cases is displayed in the below chart.
+
+```{r}
+ggplot(data = x,
+       aes(x = dumdate,
+           y = p * 100)) +
+  geom_area(fill = 'darkorange', alpha = 0.6) +
+  ylim(0, 100) +
+  theme_economist() +
+  labs(x = 'Date',
+       y = 'Percentage',
+       title = 'Malaria as a percentage of all cases',
+       subtitle = 'OPD data')
+```
+
+As with non-malaria cases, we can explore seasonality in malaria cases by overlapping years on top of one another.
+
+```{r}
+cols <- colorRampPalette(brewer.pal(n = 9, name = 'Spectral'))(length(unique(x$year)))
+ggplot(data = x,
+       aes(x = as.Date(paste0('1900-', as.numeric(month), '-01')),
+           y = p * 100,
+           group = year,
+           color = year)) +
+  geom_line() +
+  scale_color_manual(name = 'Year',
+                     values = cols) +
+  labs(x = 'Month',
+       y = 'Percentage',
+       title = 'Malaria cases seasonality',
+       subtitle = 'Each line is one year') +
+  theme_economist() +
+  scale_x_date(date_labels = "%b")
+```
+
+The above charts aggregated data at the monthly level. An alternative is to examine at the daily level.
+
+```{r}
+x <- opd %>%
+  group_by(date) %>%
+  summarise(all=n(),
+            malaria=length(which(malaria))) %>%
+  mutate(p=malaria/all) %>%
+  mutate(no_malaria = all - malaria) 
+
+ggplot(data = x,
+       aes(x = date,
+           y = p * 100)) +
+  geom_line(alpha = 0.6,
+            color = 'darkorange') +
+    labs(x = 'Date',
+       y = 'Percentage',
+       title = 'Malaria cases seasonality',
+       subtitle = 'Daily variation') +
+  theme_economist() 
+```
+
+Seasonality using daily data is best examined through faceting. The below chart shows malaria (as a percentage of all OPD cases) for each year separately.
+
+```{r}
+ggplot(data = x %>%
+         mutate(year = as.numeric(format(date, '%Y'))),
+       aes(x = date,
+           y = p * 100)) +
+  geom_point(alpha = 0.6,
+            color = 'darkorange',
+            size = 0.5) +
+  facet_wrap(~year, scales = 'free_x') +
+    theme_economist() +
+  scale_x_date(date_labels = "%b") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = 'Malaria as a percentage of all cases',
+       subtitle = 'OPD',
+       x = 'Date',
+       y = 'Percentage')
+```
+
+To see trends from a more birds-eye view, we can also aggregate at the year level. Doing so results in the following.
+
+```{r}
+x <- opd %>%
+  mutate(year = as.numeric(format(date, '%Y'))) %>%
+  group_by(year) %>%
+  summarise(all=n(),
+            malaria=length(which(malaria))) %>%
+  mutate(p=malaria/all) %>%
+  mutate(no_malaria = all - malaria) 
+ggplot(data = x,
+       aes(x = year,
+           y = malaria)) +
+  geom_bar(stat = 'identity',
+           fill = 'darkorange',
+           alpha = 0.6) +
+  labs(x = 'Year',
+       y = 'Cases',
+       title = 'Malaria cases by year',
+       subtitle = 'OPD data') +
+  theme_economist()
+```
+
+Instead of raw numbers (above), we can also examine yearly malaria in relative terms (below):
+
+```{r}
+x <- opd %>%
+  mutate(year = as.numeric(format(date, '%Y'))) %>%
+  group_by(year) %>%
+  summarise(all=n(),
+            malaria=length(which(malaria))) %>%
+  mutate(p=malaria/all) %>%
+  mutate(no_malaria = all - malaria) 
+ggplot(data = x,
+       aes(x = year,
+           y = p * 100)) +
+  geom_bar(stat = 'identity',
+           fill = 'darkorange',
+           alpha = 0.6) +
+  labs(x = 'Year',
+       y = 'Percentage',
+       title = 'Malaria cases as percentage of all cases, by year',
+       subtitle = 'OPD data') +
+  theme_economist()
+```
+
+
 #### By age group
 
-Age groups should be divided differently than previously^[<1, 1-3, 3-5, 5-10, 10-15]
+The distribution of all OPD visits is below.
 
-### Malaria cases over time (relative to all OPD cases)
+```{r}
+ggplot(data = opd,
+       aes(x = age / 12)) +
+  geom_density(fill = 'darkblue',
+               alpha = 0.6) +
+  labs(title = 'Distribution of OPD patients',
+       subtitle = '0-15 years old only',
+       x = 'Years',
+       y = 'Density') +
+  theme_economist()
+```
 
-#### By age group
+For our analysis, we divide into 5 groups, with distributions as follows:
+
+```{r}
+ggplot(data = opd,
+       aes(x = age_group)) +
+  geom_bar(fill = 'darkblue',
+               alpha = 0.6) +
+  labs(title = 'Distribution of OPD patients',
+       subtitle = '0-15 years old only',
+       x = 'Years',
+       y = 'Density') +
+  theme_economist()
+```
+
+The total daily OPD caseload for each group is seen below. Each point is one day's caseload. The blue line is the smoothed trend.
+
+```{r}
+x <- opd %>%
+  group_by(date, age_group) %>%
+  tally
+
+ggplot(data = x,
+       aes(x = date, y = n)) +
+  geom_point(alpha = 0.2,
+             size = 0.3) +
+  geom_smooth() +
+  theme_economist() +
+  labs(title = 'Total OPD cases',
+       subtitle = 'By age group',
+       x = 'Date',
+       y = 'Cases') +
+  facet_wrap(~age_group)
+```
+
+The below chart is identical to the above, but with malaria cases only.
+
+```{r}
+x <- opd %>%
+  filter(malaria) %>%
+  group_by(date, age_group) %>%
+  tally
+
+ggplot(data = x,
+       aes(x = date, y = n)) +
+  geom_point(alpha = 0.2,
+             size = 0.3) +
+  geom_smooth() +
+  theme_economist() +
+  labs(title = 'Malaria OPD cases',
+       subtitle = 'By age group',
+       x = 'Date',
+       y = 'Cases') +
+  facet_wrap(~age_group)
+```
+
+As an alternative to the above, we can examine each age group's malaria cases as a proportion of the total number of visists from patients of that age group.
+
+```{r}
+x <- opd %>%
+  group_by(age_group, date) %>%
+  summarise(malaria = length(which(malaria)),
+            total = n()) %>%
+  mutate(non_malaria = total - malaria,
+         p = malaria / total)
+
+cols <- colorRampPalette(brewer.pal(n = 9, name = 'Spectral'))(length(unique(x$age_group)))
+ggplot(data = x,
+       aes(x = date,
+           y = p * 100,
+           group = age_group,
+           color = age_group)) +
+  geom_line(alpha = 0.6) +
+  scale_color_manual(name = '',
+                     values = cols) +
+  theme_economist() +
+  labs(x = 'Date',
+       y = 'Percentage',
+       title = 'Malaria as percentage of all cases',
+       subtitle = 'OPD, stratified by age group')
+```
+
+
+Since the above is to dense for clear understanding, we can facet for each year for a more in-depth exploration. The below chart shows one facet for each year, along with smoothed loess trend lines.
+
+```{r}
+ggplot(data = x %>%
+         mutate(year = as.numeric(format(date, '%Y'))),
+       aes(x = date,
+           y = p * 100,
+           group = age_group,
+           color = age_group)) +
+  geom_point(alpha = 0.6,
+             size = 0.2) +
+    stat_smooth(se = FALSE) +
+  scale_color_manual(name = '',
+                     values = cols) +
+  theme_economist() +
+  labs(x = 'Date',
+       y = 'Percentage',
+       title = 'Malaria as percentage of all cases',
+       subtitle = 'OPD, stratified by age group') +
+  facet_wrap(~year, scales = 'free_x') +
+  scale_x_date(date_labels = "%b") 
+```
+
+It appears that seasonal risk is similar across age groups.
+
+```{r}
+x <- opd %>%
+  mutate(month = as.numeric(format(date, '%m'))) %>%
+  group_by(month, age_group) %>%
+  summarise(malaria = length(which(malaria)),
+            total = n()) %>%
+  mutate(non_malaria = total - malaria,
+         p = malaria / total)
+
+cols <- colorRampPalette(brewer.pal(n = 9, name = 'Spectral'))(length(unique(x$age_group)))
+
+ggplot(data = x,
+       aes(x = month,
+           y = p * 100)) +
+  geom_area(stat = 'identity',
+            color = 'black',
+            lwd = 0.5,
+            fill = 'darkorange',
+            alpha = 0.6) +
+  facet_wrap(~age_group, ncol = 1) +
+  theme_economist() +
+  labs(x = 'Month',
+       y = 'Percentage',
+       title = 'Age and seasonality',
+       subtitle = 'Malaria cases as percentage of all OPD visits, by age')
+```
+
 
 ### Incidence: Malaria cases over time (relative to population at risk)
 
@@ -113,7 +447,6 @@ Matched case-control (or multinomial logistic regression) between:
 2. In the OPD (symptomatic, but quick to recover)
 3. In the INPD (symptomatic, severe malaria)
 
-Loop in Quique and Alfredo^[He looks at parasite differences that cause severe vs. asymptomatic]
 
 ```{r bib, include=FALSE}
 # create a bib file for the R packages used in this document
