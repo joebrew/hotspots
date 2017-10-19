@@ -1,15 +1,6 @@
 # This File Imports and Manages the OPD1+2+3+4+5 data extracted from CISM's Server on 
 # the 26th of May of 2016 using the R code provided by Agnaldo Samuel. 
 # 
-# It was written by Joe Brew, but is based largely
-# on "misc/opd_cleaning_joe.do"
-# by Bea Galatas
-# Still in the making: 
-# - Physical Examincation 
-# - Diagnosis from OPD and ICD 
-# - Get Densities from Servolab 
-# - Get Hematocrit Info from Servolab 
-
 # Attach packages
 library(dplyr)
 library(EpiWeek)
@@ -20,8 +11,40 @@ library(DBI)
 library(readxl)
 
 
-if('all_data.RData' %in% dir('data')){
-  load('data/all_data.RData')
+date_truncate <- function (date_object, level = c("month", "quarter", "year")) 
+{
+  if (is.null(level)) {
+    stop("You must provide a level argument of either \"month\", \"quarter\" or \"year\".")
+  }
+  date_object <- as.Date(date_object)
+  if (sum(!is.na(date_object)) == 0) {
+    return(date_object)
+  }
+  if (level == "month") {
+    return_object <- date_object
+    return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                  "%Y-%m"), "-01"))
+    return(return_object)
+  }
+  if (level == "quarter") {
+    q_month <- (((((as.numeric(format(date_object, "%m"))) - 
+                     1)%/%3) + 1) * 3) - 2
+    return_object <- date_object
+    return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                  "%Y"), ifelse(nchar(q_month[!is.na(return_object)]) == 
+                                                                                  2, "-", "-0"), q_month, "-01"))
+    return(return_object)
+  }
+  if (level == "year") {
+    return_object <- date_object
+    return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                  "%Y"), "-01-01"))
+    return(return_object)
+  }
+}
+
+if('diarrhea_data.RData' %in% dir('data')){
+  load('data/diarrhea_data.RData')
 } else {
   
   if('opd_cleaned.RData' %in% dir('data')){
@@ -832,8 +855,8 @@ if('all_data.RData' %in% dir('data')){
                           skip = 3)$Bairro
   
   # Create a time at risk dataset for the opd period
-  if('cleaned_time_at_risk.RData' %in% dir('data')){
-    load('data/cleaned_time_at_risk.RData')
+  if('cleaned_time_at_risk_diarrhea.RData' %in% dir('data')){
+    load('data/cleaned_time_at_risk_diarrhea.RData')
   } else {
     
     # Create time at risk
@@ -847,10 +870,10 @@ if('all_data.RData' %in% dir('data')){
     tar <- tar %>%
       filter(!bairro %in% expansion)
     
-    # Keep only those who are < 15 (since this is the OPD cut-off)
+    # Keep only those who are < 5 (since this is the OPD cut-off)
     # at the start date
     tar <- tar %>%
-      filter(as.numeric(startDate - dob) / 365.25 < 15)
+      filter(as.numeric(startDate - dob) / 365.25 <= 5)
     
     # Expand time at risk into a daily dataset
     etar <- cism::expand_time_at_risk(time_at_risk = tar,
@@ -858,22 +881,22 @@ if('all_data.RData' %in% dir('data')){
                                       end_date = '2015-12-31')
     rm(tar)
     
-    # Remove from the expanded table any >15 y.o. dates
-    etar <- 
+    # Remove from the expanded table any >5 y.o. dates
+    etar <-
       etar %>%
       left_join(individual %>%
                   dplyr::select(uuid,
                                 dob) %>%
                   mutate(dob = as.Date(dob)),
-                by = c('individual_uuid' = 'uuid')) 
+                by = c('individual_uuid' = 'uuid'))
     etar <- data.table::data.table(etar)
     etar[,yo := as.numeric(date -dob) / 365.25]
-    etar <- etar[yo < 15]
+    etar <- etar[yo <= 5]
     etar <- data.frame(etar)
     
     # Save a copy for faster later use
     save(etar,
-         file = 'data/cleaned_time_at_risk.RData')
+         file = 'data/cleaned_time_at_risk_diarrhea.RData')
   }
   
   if(file.exists('data/cleaned_inpd.RData')){
@@ -926,15 +949,182 @@ if('all_data.RData' %in% dir('data')){
     save(inpd,
          file = 'data/cleaned_inpd.RData')
   }
-  save.image('data/all_data.RData')
+  
+  # Standardize ages
+  inpd$age <- inpd$age * 12
+  
+  # Divide age groups
+  opd$age_group <- cut(opd$age / 12,
+                       c(0, 1, 3, 5, 10, 15),
+                       include.lowest = TRUE)
+  
+  # Divide age groups
+  inpd$age_group <- cut(inpd$age / 12,
+                        c(0, 1, 3, 5, 10, 15),
+                        include.lowest = TRUE)
+  
+  # Keep only children under 5
+  opd <- opd %>%
+    filter(age <= (12 * 5))
+  inpd <- inpd %>%
+    filter(age <= (12 * 5))
+  
+  # Combine opd and inpd into one dataset
+  df <- opd %>%
+    dplyr::select(date, age, diarrhea, diarrdays, perm_id, sex) %>%
+    mutate(sex = ifelse(sex == 0, 'male', 'female')) %>%
+    mutate(src = 'OPD') %>%
+    bind_rows(
+      inpd %>%
+        dplyr::select(date, age,  diarrhea, diarrdays, perm_id, sex) %>%
+        mutate(sex = ifelse(sex == 1, 'female', 'male')) %>%
+        mutate(perm_id = ifelse(grepl('888 -', perm_id), NA, perm_id)) %>%
+        mutate(src = 'INPD'))
+  
+  # Keep only those not in expansion zone
+  df <- df %>%
+    dplyr::filter(!substr(perm_id, 1, 4) %in% expansion)
+  
+  # Bring the permid into etar
+  individual <- 
+    individual %>%
+    rename(perm_id = lastName)
+  
+  individual <- individual %>% filter(!duplicated(perm_id))
+  
+  etar <-
+    left_join(etar,
+              individual %>%
+                dplyr::select(perm_id, uuid),
+              by = c('individual_uuid' = 'uuid'))
+  
+  # Remove those in the expansion zone
+  etar <- etar %>% 
+    dplyr::select(-dob) %>%
+    dplyr::filter(!substr(perm_id, 1, 4) %in% expansion)
+  
+  # Clean up df
+  df <- df %>% 
+    mutate(illness = TRUE) %>%
+    filter(!is.na(perm_id)) 
+  
+  # Keep only one ob per day/person in df
+  df <- df %>% arrange(src)
+  df <- df %>%
+    group_by(date, perm_id) %>%
+    summarise(#age = dplyr::first(age),
+      diarrhea = dplyr::first(diarrhea),
+      diarrdays = dplyr::first(diarrdays),
+      sex = dplyr::first(sex),
+      src = dplyr::first(src),
+      illness = dplyr::first(illness))
+  df <- df %>% ungroup
+  df <- df %>% group_by(date, perm_id) %>% mutate(dummy = n()) %>%
+    ungroup %>%
+    filter(dummy == 1) %>%
+    dplyr::select(-dummy) # 481908
+  # Join etar (eligible days) and illness to get panel data
+  panel <- left_join(etar,
+                     df)
+  
+  # Clean up
+  panel <- panel %>%
+    mutate(illness = ifelse(is.na(illness), FALSE, illness)) %>%
+    mutate(diarrhea = ifelse(is.na(diarrhea), FALSE, diarrhea)) %>%
+    group_by(perm_id) %>%
+    mutate(sex = dplyr::first(sex[!is.na(sex)])) %>%
+    ungroup
+  
+  panel$bairro <- substr(panel$perm_id, 1, 4)
+  
+  # Get location
+  geo <- individual %>%
+    dplyr::select(extId, perm_id)  %>% 
+    mutate(extId = substr(extId, 1, 9)) %>%
+    dplyr::filter(!duplicated(perm_id)) %>%
+    left_join(location %>%
+                dplyr::filter(!duplicated(extId)) %>%
+                dplyr::select(extId, longitude, latitude)) %>%
+    mutate(longitude = as.numeric(as.character(longitude)),
+           latitude = as.numeric(as.character(latitude))) %>%
+    dplyr::select(-extId)
+  
+  # Join geo to panel
+  panel <- left_join(panel, geo)
+  
+  # Aggregate panel
+  panel <- panel %>%
+    mutate(year_month = date_truncate(date, 'month')) %>%
+    mutate(yo = round(yo)) %>%
+    group_by(bairro, year_month, sex, yo) %>%
+    summarise(cases = sum(diarrhea),
+              cases_o = sum(diarrhea[src == 'OPD']),
+              cases_i = sum(diarrhea[src == 'INPD']),
+              eligibles = length(diarrhea)) %>%
+    mutate(incidence = cases / eligibles * 1000,
+           incidence_o = cases_o / eligibles * 1000,
+           incidence_i = cases_i / eligibles * 1000) %>%
+    ungroup
+     
+  
+  # Save
+  save(panel,
+       opd,
+       inpd,
+       individual, 
+       location,
+       residency,
+       file = 'data/diarrhea_data.RData')
+  # save.image('data/diarrhea_data.RData')
 }
 
-# Divide age groups
-opd$age_group <- cut(opd$age / 12,
-                     c(0, 1, 3, 5, 10, 15),
-                     include.lowest = TRUE)
+# https://rpubs.com/Koundy/71792
 
-# Divide age groups
-inpd$age_group <- cut(inpd$age,
-                     c(0, 1, 3, 5, 10, 15),
-                     include.lowest = TRUE)
+
+library(ggplot2)
+library(gridExtra)
+
+theme_publication <- function(base_size=9) {
+  library(grid)
+  library(ggthemes)
+  (theme_foundation(base_size=base_size)
+    + theme(plot.title = element_text(#face = "bold",
+      size = rel(1.2), hjust = 0.5),
+      text = element_text(),
+      panel.background = element_rect(colour = NA),
+      plot.background = element_rect(colour = NA),
+      panel.border = element_rect(colour = NA),
+      axis.title = element_text(#face = "bold",
+        size = rel(1)),
+      axis.title.y = element_text(angle=90,vjust =2),
+      axis.title.x = element_text(vjust = -0.2),
+      axis.text = element_text(), 
+      axis.line = element_line(colour="black"),
+      axis.ticks = element_line(),
+      panel.grid.major = element_line(colour="#f0f0f0"),
+      panel.grid.minor = element_blank(),
+      legend.key = element_rect(colour = NA),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.key.size= unit(0.2, "cm"),
+      # legend.margin = unit(0, "cm"),
+      legend.title = element_text(face="italic"),
+      plot.margin=unit(c(10,5,5,5),"mm"),
+      strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+      strip.text = element_text(face="bold")
+    ))
+  
+}
+
+scale_fill_publication <- function(...){
+  library(scales)
+  discrete_scale("fill","publication",manual_pal(values = c("#386cb0","#fdb462","#7fc97f","#ef3b2c","#662506","#a6cee3","#fb9a99","#984ea3","#ffff33")), ...)
+  
+}
+
+scale_colour_publication <- function(...){
+  library(scales)
+  discrete_scale("colour","publication",manual_pal(values = c("#386cb0","#fdb462","#7fc97f","#ef3b2c","#662506","#a6cee3","#fb9a99","#984ea3","#ffff33")), ...)
+  
+}
+

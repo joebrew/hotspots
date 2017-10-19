@@ -1,0 +1,379 @@
+---
+title: Identification of hotspots of diarrhoeal disease in Manhiça, Mozambique
+output: 
+  pdf_document:
+    includes:
+      in_header: preamble.sty
+---
+
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, comment = NA, error= FALSE, cache = F}
+# No scientific notation
+# options(scipen=999)
+
+# Packages (load child-specific packages in their respective files)
+library(knitr)
+library(xtable)
+library(ggplot2)
+library(dplyr)
+library(rgdal)
+library(rgeos)
+library(maptools)
+library(ggplot2)
+
+# Basic knitr options
+opts_chunk$set(comment = NA, 
+               echo = FALSE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE,
+               fig.align = 'center')
+options(xtable.comment = FALSE)
+
+# Get data
+source('prepare_data_diarrhea.R', echo = FALSE)
+
+theme_paper <- theme_bw()
+```
+
+
+```{r}
+authors <- data.frame(name = c('Joe Brew',
+                               'Bea Galatas',
+                               'CISM collaborators',
+                               'Quique Bassat'),
+                      email = c('joe@databrew.cc',
+                                'beatriz.galatas@isglobal.org',
+                                'xxx@manhica.net',
+                                'quique.bassat@isglobal.org'),
+                      affilitation = c("isglobal,cism,vu",
+                                       'isglobal,cism',
+                                       'cism',
+                                       "isglobal,cism"),
+                      footnote = c("Corresponding Author",
+                                   rep('', 3)),
+                      stringsAsFactors = FALSE)
+institutions <- data.frame(code = c('isglobal',
+                                    'cism',
+                                    'vu'),
+                           institution = c('Barcelona Institute for Global Health',
+                                           'Centro de Investigação em Saúde de Manhiça',
+                                           'University of Amsterdam'),
+                           address = c('c/ Rosselló, 132, 5è 2a. 08036, Barcelona, Spain',
+                                       'Vila da Manhiça, Bairro Cambeve, Rua 12, Distrito da Manhiça, CP 1929, Maputo, Mozambique',
+                                       'De Boelelaan 1105, 1081 HV Amsterdam, Netherlands'),
+                      stringsAsFactors = FALSE)
+
+make_author <- function(authors,
+                        institutions){
+  
+  out <- c()
+  for (i in 1:nrow(authors)){
+    this_author <- authors$name[i]
+    these_institutions <- authors$affilitation[i]
+    these_institutions <- unlist(strsplit(these_institutions, ','))
+    author_text <- paste0(this_author)
+    for (j in 1:length(these_institutions)){
+      this_institution <- these_institutions[j]
+      if(any(grepl(this_institution, out))){
+        author_text <- paste0(author_text,
+                              '\\footrecall{',
+                              this_institution,
+                              '}'
+                              )
+      } else {
+        # new institution, get full name
+        full_name <- institutions$institution[institutions$code == this_institution]
+        address <- institutions$address[institutions$code == this_institution]
+        author_text <- paste0(author_text,
+                              '\\footremember{',
+                              this_institution,
+                              '}{',
+                              full_name,
+                              ': ',
+                              address,
+                              '}')
+      }
+    }
+    out[i] <- author_text
+  }
+  out <- paste0(out, collapse = ', ')
+  cat(out)
+}
+```
+
+
+
+\begin{center}
+\begin{large}
+
+```{r, results = 'asis', eval = TRUE}
+make_author(authors = authors,
+            institutions = institutions)
+```
+
+\end{large}
+\end{center}
+
+\vspace{5mm}
+
+\begin{center}
+\textbf{Abstract}  
+\end{center}
+
+\vspace{5mm}
+\begin{center}
+\begin{changemargin}{3cm}{3cm} 
+
+Diarrhoeal illness is a major cause of infant and child mortality in Sub-Saharan Africa. Using geographic information systems and statistical modelling to identify spatial and temporal areas of risk can help elucidate social risk factors as well as guide public health interventions. We examine historical data on the incidence of diarrhoea in patients under five years old in the district of Manhiça, Mozambique in order to map risk, identify hotspots, describe associated factors, and generate predictive estimates of disease activity.
+
+\end{changemargin}
+\end{center}
+
+
+# Introduction 
+
+
+Diarrhoea is a chief contributing factor to the high rates of infant and child mortality in Mozambique. But risk is not distributed evenly among the population, nor across time. There may exist geographical "hotspots" and temporal "peaks" at which risk is greatest. The identification and understanding of these areas and periods of greatest risk can lead to effective preventive interventions, thereby saving lives and improving the health of children. Additionally, the quantification of risk attributible to geography and seasonality is important in order to gain a full understanding of non-geographic and non-seasonal risk factors for diarrhoea, such as socioeconomic status, pre-disposing illnesses and conditions such as malnutrition, and hygiene-related behaviours.
+
+UNFINISHED
+*Literature review, overview of CISM demographic surveillance system, overview of INPD and OPD systems, etc.*
+
+## Objectives
+
+The \textbf{primary} objective of this study is to identify hotspots of risk for infant and child diarrhoeal illness and malnutrition in Manhiça, Mozambique. 
+
+\noindent The \textbf{secondary} objectives of this study are to:
+\begin{itemize}
+  \setlength\itemsep{-0.2em}
+\item Produce risk maps of scientific and public health utility
+\item Create a reproducible research approach using transparent methods, so as to be generalizable to other diseases and areas
+\item Gain understanding of and estimate the magnitude of differntial risk for diarrhoea and malnutrition across space and time, accounting for (and quantifying) non spatiotemporal factors
+\end{itemize}
+
+
+# Methods
+
+We tretrieved data from both the census and the Manhiça District Hospital and health posts in order to estimate both the incidence of diarrhoeal disease, as well as to understand (in terms of geography, timing, and sociodemographic factors) the population at risk. Following data retrieval we modelled the likelihood of our two outcomes (outpatient diarrhoeal disease and conditional admission to inpatient status) as a function of geography using spatial scan statistics, Bernoulli modeling, and kernel density estimation. W then complemented our (purely) spatial estimates with thehe Kulldorf combinatory method so as to assess seasonality and differential risk over time. We adjust our model for the sociodemographic and economic characteristics of the population, so as to identify both unadjusted and adjusted "hotspots" of risk, and to better understand the role of location, precipitation, seasonality, and other characteristics in determining a child's risk for malnutrition and diarrhoea. Finally, using simple logistic regression, we estimate the odds of diarrhoeal disease as a function of sociodemographic characteristics, after adjustment for the outcome's spatio-temporal components.
+
+UNFINISHED
+*More details, citations, specific filtering and aggregation steps, etc.*
+
+# Results
+
+UNFINISHED
+
+### Overall cases
+
+```{r}
+
+x <- panel %>%
+  mutate(date = year_month) %>%
+  group_by(date) %>%
+  summarise(cases = sum(cases, na.rm = TRUE),
+            cases_o = sum(cases_o, na.rm = TRUE),
+            cases_i = sum(cases_i, na.rm = TRUE),
+            eligibles = sum(eligibles, na.rm = TRUE)) %>%
+  ungroup %>%
+  mutate(incidence = cases / eligibles * 1000)
+ggplot(data = x,
+       aes(x = date,
+           y = cases)) +
+  geom_line(alpha = 0.7) +
+  geom_smooth() +
+  theme_publication() +
+  labs(x = 'Month',
+       y = 'Cases',
+       title = 'Diarrhea cases among < 5 year-olds',
+       subtitle = 'Manhiça, non-expansion zone, known perm-ids')
+
+```
+
+
+### Estimated incidence
+
+
+```{r}
+x <- panel %>%
+  mutate(date = year_month) %>%
+  group_by(date) %>%
+  summarise(cases = sum(cases, na.rm = TRUE),
+            cases_o = sum(cases_o, na.rm = TRUE),
+            cases_i = sum(cases_i, na.rm = TRUE),
+            eligibles = sum(eligibles, na.rm = TRUE)) %>%
+  ungroup %>%
+  mutate(incidence = cases / eligibles * 1000)
+ggplot(data = x,
+       aes(x = date,
+           y = incidence)) +
+  geom_line(alpha = 0.7) +
+  geom_smooth() +
+  theme_publication() +
+  labs(x = 'Month',
+       y = 'Incidence',
+       title = 'Diarrhea incidence (per 1,000) among < 5 year-olds',
+       subtitle = 'Manhiça, non-expansion zone, known perm-ids')
+```
+
+### All-time risk
+
+```{r}
+# Read shapefile
+
+expansion <- read_excel('data/Bairros de area de Expansao_Demo.xls',
+                          skip = 3)$Bairro
+shp <- readOGR('data/dss/', 'DSS_MANHICA', verbose = FALSE)
+shp@data$bairro <- as.character(shp@data$NeighCode)
+shp <- shp[!shp@data$bairro %in% as.character(expansion),]
+
+# Get risk
+x <- panel %>%
+  group_by(bairro) %>%
+   summarise(cases = sum(cases, na.rm = TRUE),
+            cases_o = sum(cases_o, na.rm = TRUE),
+            cases_i = sum(cases_i, na.rm = TRUE),
+            eligibles = sum(eligibles, na.rm = TRUE)) %>%
+  ungroup %>%
+  mutate(incidence = cases / eligibles * 1000)
+
+map <- shp
+map@data <- map@data %>%
+  left_join(x)
+map <- map[!is.na(map@data$incidence),]
+
+map <- broom::tidy(map,region = 'bairro')
+map <- left_join(map,x,
+                 by = c('id' = 'bairro'))
+
+ggplot(data = map,
+       aes(x = long,
+           y = lat,
+           group = group)) +
+  geom_polygon(aes(fill = incidence)) +
+  ggthemes::theme_map() +
+  scale_fill_gradient2(name = 'Incidence', low = 'white', high = 'darkred') +
+  theme_bw() +
+  labs(x = 'Longitude',
+       y = 'Latitude',
+       title = 'Overall incidence per 1,000: entire study period',
+       subtitle = 'Only known perm-ids with geocoding')
+```
+
+### Yearly incidence
+
+```{r, fig.height=7}
+# Get risk
+x <- panel %>%
+  mutate(year = date_truncate(year_month, 'year')) %>%
+  group_by(bairro, year) %>%
+   summarise(cases = sum(cases, na.rm = TRUE),
+            cases_o = sum(cases_o, na.rm = TRUE),
+            cases_i = sum(cases_i, na.rm = TRUE),
+            eligibles = sum(eligibles, na.rm = TRUE)) %>%
+  ungroup %>%
+  mutate(incidence = cases / eligibles * 1000)
+
+#
+years <- sort(unique(x$year))
+
+map_list <- list()
+for (i in 1:length(years)){
+  this_year <- years[i]
+    
+  map <- shp
+  map@data <- map@data %>%
+    left_join(x %>% filter(year == this_year))
+  map <- map[!is.na(map@data$incidence),]
+  
+  map <- broom::tidy(map,region = 'bairro')
+  map <- left_join(map,x,
+                   by = c('id' = 'bairro'))
+  map_list[[i]] <- map
+  
+}
+map <- bind_rows(map_list)
+map$year <- substr(map$year, 1, 4)
+
+
+g <- ggplot(data = map,
+         aes(x = long,
+             y = lat,
+             group = group)) +
+    geom_polygon(aes(fill = incidence)) +
+    ggthemes::theme_map() +
+    scale_fill_gradient2(name = 'Incidence', low = 'blue', high = 'darkred') +
+    theme_bw() +
+  facet_wrap(~year) +
+    labs(x = '',
+         y = '',
+         title = 'Yearly incidence per 1,000',
+         subtitle = 'Only known perm-ids with geocoding') +
+  coord_map('albers', lat0 = 39, lat1 = 45)
+g
+```
+
+
+### Seasonal incidence
+
+```{r, fig.height=7}
+# Get risk
+x <- panel %>%
+  mutate(month = format(year_month, '%B')) %>%
+  group_by(bairro, month) %>%
+   summarise(cases = sum(cases, na.rm = TRUE),
+            cases_o = sum(cases_o, na.rm = TRUE),
+            cases_i = sum(cases_i, na.rm = TRUE),
+            eligibles = sum(eligibles, na.rm = TRUE)) %>%
+  ungroup %>%
+  mutate(incidence = cases / eligibles * 1000)
+
+#
+months <- unique(x$month)
+months <- unique(format(seq(as.Date('2015-01-01'), as.Date('2015-12-31'), by = 1), '%B'))
+
+map_list <- list()
+for (i in 1:length(months)){
+  this_month <- months[i]
+    
+  map <- shp
+  map@data <- map@data %>%
+    left_join(x %>% filter(month == this_month))
+  map <- map[!is.na(map@data$incidence),]
+  
+  map <- broom::tidy(map,region = 'bairro')
+  map <- left_join(map,x,
+                   by = c('id' = 'bairro'))
+  map_list[[i]] <- map
+  
+}
+map <- bind_rows(map_list)
+map$month <- factor(map$month,
+                    levels = months)
+
+
+ggplot(data = map,
+         aes(x = long,
+             y = lat,
+             group = group)) +
+    geom_polygon(aes(fill = incidence)) +
+    ggthemes::theme_map() +
+    scale_fill_gradient2(name = 'Incidence', low = 'blue', high = 'darkred') +
+    theme_bw() +
+  facet_wrap(~month) +
+    labs(x = '',
+         y = '',
+         title = 'Monthly incidence per 1,000',
+         subtitle = 'Only known perm-ids with geocoding') +
+  coord_map('albers', lat0 = 39, lat1 = 45)
+```
+
+# Discussion
+
+UNFINISHED  
+
+*Findings pertaining to space, time, and sociodemographic risk factors, implications, usability, applicability to interventions, applicability to clinical decision-making, generalizability of methods to other contexts*
+
+References {#references .unnumbered}
+==========
+
